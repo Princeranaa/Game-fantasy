@@ -6,6 +6,7 @@ import VerifyOTP from "./Pages/VerifyOtp";
 import ProtectedRoute from "./Private/ProtectedRoute";
 import GameType from "./GamesLobbys/GameType";
 import NotFoundPage from "./Pages/NotFoundPage";
+import GameRoom from "./GamesLobbys/GameRoom";
 
 function App() {
   return (
@@ -20,7 +21,7 @@ function App() {
         {/* protected routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/game" element={<GameType />} />
-          {/* <Route path="/dashboard" element={<GameType />} /> */}
+          <Route path="/game/:roomId" element={<GameRoom />} />
         </Route>
 
         {/* 404 */}
