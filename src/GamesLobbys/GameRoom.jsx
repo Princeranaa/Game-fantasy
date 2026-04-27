@@ -1,53 +1,170 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import table from "../assets/GameSection/game-table.png";
 import GamePlay from "../assets/Loading/Game-Play.png";
+import socket from "../Utils/socket";
 
-const GameTable = () => {
-  const [gameStarted, setGameStarted] = useState(true);
+const cardImages = import.meta.glob(
+  "../assets/cards/**/*.{png,jpg,jpeg,webp}",
+  {
+    eager: true,
+    import: "default",
+  },
+);
 
-  const players = [
-    { id: 1, name: "DEMO1", points: 10, position: "left-middle" },
-    { id: 2, name: "Alex", points: 10, position: "top-left" },
-    { id: 3, name: "MARK", points: 10, position: "top-center" },
-    { id: 4, name: "Botplayer", points: 10, position: "top-right" },
-    { id: 5, name: "Kevin", points: 10, position: "right-middle" },
-    { id: 6, name: "You", points: 49, position: "bottom-center" },
-  ];
+const GameRoom = () => {
+  const { roomId } = useParams();
 
-  const getPositionClasses = (pos) => {
-    switch (pos) {
-      case "top-left":
+  const [gameStarted, setGameStarted] = useState(false);
+  const [players, setPlayers] = useState([]);
+  const [status, setStatus] = useState("Joining room...");
+  const [canStart, setCanStart] = useState(false);
+
+  const [myHand, setMyHand] = useState([]);
+  const [discardPile, setDiscardPile] = useState([]);
+  const [wildCard, setWildCard] = useState(null);
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    // JOIN SOCKET ROOM
+    socket.emit("joinRoom", { roomId });
+
+    // PLAYER JOINED
+    socket.on("userJoined", (data) => {
+      setPlayers(data.players || []);
+      setStatus("Waiting for players...");
+    });
+
+    // WAITING STATE
+    socket.on("waitingState", (data) => {
+      setCanStart(data.canStart);
+      setStatus(data.message || "Waiting for host...");
+    });
+
+    // AUTO / MANUAL STARTING
+    socket.on("gameStarting", (data) => {
+      setStatus(data.message || "Game Starting...");
+    });
+
+    // GAME STARTED
+    socket.on("gameStarted", (gameData) => {
+      console.log("gameData", gameData);
+
+      setGameStarted(true);
+      setPlayers(gameData.players || []);
+      setDiscardPile(gameData.discardPile || []);
+      setWildCard(gameData.wildCard || null);
+    });
+
+    socket.on("playerHand", (data) => {
+      setMyHand(data.hand || []);
+    });
+
+    // ERRORS
+    socket.on("turnError", (error) => {
+      console.log(error);
+      alert(error.message);
+    });
+
+    return () => {
+      socket.off("userJoined");
+      socket.off("waitingState");
+      socket.off("gameStarting");
+      socket.off("playerHand");
+      socket.off("gameStarted");
+      socket.off("turnError");
+    };
+  }, [roomId]);
+
+  // HOST START GAME
+  const handleStartGame = () => {
+    socket.emit("startGame", { roomId });
+  };
+
+  // DYNAMIC PLAYER POSITION
+  const getPositionClasses = (index) => {
+    switch (index) {
+      case 0:
         return "top-[12%] left-[25%] -translate-x-1/2 -translate-y-1/2";
-      case "top-center":
+
+      case 1:
         return "top-[12%] left-1/2 -translate-x-1/2 -translate-y-1/2";
-      case "top-right":
+
+      case 2:
         return "top-[12%] left-[75%] -translate-x-1/2 -translate-y-1/2";
-      case "left-middle":
+
+      case 3:
         return "top-[50%] left-[3%] -translate-x-1/2 -translate-y-1/2";
-      case "right-middle":
+
+      case 4:
         return "top-[50%] right-[3%] translate-x-1/2 -translate-y-1/2";
+
       default:
         return "";
     }
   };
 
-  // Modern Card Component with Suit Colors
-  const Card = ({ value, suit, isRed = false }) => (
-    <div className="w-[38px] h-[52px] bg-white rounded-md border border-gray-300 shadow-sm flex flex-col p-1 relative select-none">
-      <span
-        className={`text-[11px] font-bold leading-none ${isRed ? "text-red-600" : "text-black"}`}
-      >
-        {value}
-      </span>
-      <span className={`text-sm ${isRed ? "text-red-600" : "text-black"}`}>
-        {suit}
-      </span>
-    </div>
-  );
+  const getCardImage = (card) => {
+    if (!card) return null;
+
+    const suitMap = {
+      "♠️": ["spades", "spade"],
+      "♠": ["spades", "spade"],
+      "♥️": ["heart", "hearts"],
+      "♥": ["heart", "hearts"],
+      "♦️": ["diamond", "diamonds"],
+      "♦": ["diamond", "diamonds"],
+      "♣️": ["club", "clubs"],
+      "♣": ["club", "clubs"],
+    };
+
+    const suitSymbol = Object.keys(suitMap).find((symbol) =>
+      card.startsWith(symbol),
+    );
+
+    if (!suitSymbol) return null;
+
+    const rank = card.replace(suitSymbol, "").replace("️", "").toLowerCase();
+    const folders = suitMap[suitSymbol];
+
+    const imagePath = Object.entries(cardImages).find(([path]) => {
+      const normalizedPath = path.toLowerCase();
+
+      return (
+        folders.some((folder) => normalizedPath.includes(`/${folder}/`)) &&
+        normalizedPath.endsWith(`/${rank}.png`)
+      );
+    });
+
+    return imagePath?.[1] || null;
+  };
+
+  // MODERN CARD UI
+  const Card = ({ card }) => {
+    const image = getCardImage(card);
+
+    if (!image) {
+      return (
+        <div className="flex h-[72px] w-[50px] items-center justify-center rounded-md bg-white text-xs font-bold text-black">
+          {card}
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={image}
+        alt={card}
+        className="h-[72px] w-[50px] select-none rounded-md object-contain drop-shadow-lg"
+        draggable={false}
+      />
+    );
+  };
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full min-h-screen bg-[#064e3b] overflow-hidden font-sans">
-      {/* 1. BACKGROUND */}
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#064e3b] font-sans">
+      {/* BACKGROUND */}
       <div
         className="absolute inset-0 z-0"
         style={{
@@ -58,12 +175,15 @@ const GameTable = () => {
       />
 
       {/* SCALE WRAPPER */}
-      <div className="relative z-10 flex items-center justify-center scale-[0.6] sm:scale-[0.8] md:scale-105 lg:scale-130 transition-transform duration-300">
+      <div className="relative z-10 flex scale-[0.6] items-center justify-center transition-transform duration-300 sm:scale-[0.8] md:scale-105 lg:scale-125">
         <div
           className="relative flex items-center justify-center"
-          style={{ width: "650px", height: "350.47px" }}
+          style={{
+            width: "650px",
+            height: "350.47px",
+          }}
         >
-          {/* Table Image */}
+          {/* TABLE */}
           <div
             className="absolute inset-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_15px_35px_rgba(0,0,0,0.6)]"
             style={{
@@ -72,142 +192,147 @@ const GameTable = () => {
             }}
           />
 
+          {/* WAITING SCREEN */}
           {!gameStarted ? (
-            <h1
-              className="relative text-white text-4xl font-black select-none cursor-pointer"
-              onClick={() => setGameStarted(true)}
-            >
-              Waiting.....
-            </h1>
+            <div className="relative flex flex-col items-center">
+              <h1 className="select-none text-4xl font-black text-white">
+                Waiting.....
+              </h1>
+
+              <p className="mt-3 text-sm font-bold uppercase tracking-widest text-white/60">
+                {status}
+              </p>
+
+              {/* HOST START BUTTON */}
+              {canStart && (
+                <button
+                  onClick={handleStartGame}
+                  className="mt-5 rounded-full bg-yellow-500 px-8 py-3 text-sm font-black uppercase text-black shadow-xl"
+                >
+                  Start Game
+                </button>
+              )}
+            </div>
           ) : (
-            /* CENTER GAMEPLAY SECTION */
+            /* GAME STARTED */
             <div
               className="absolute z-30 flex flex-col items-center justify-between"
-              style={{ width: "400px", height: "174px", top: "115px" }}
+              style={{
+                width: "400px",
+                height: "174px",
+                top: "115px",
+              }}
             >
-              {/* TOP ROW: DRAW PILE (OVERLAPPING) & DISCARD PILE */}
-              <div className="flex items-center justify-center gap-16 w-full">
-                {/* Left: Draw Pile Group */}
-                <div className="relative flex items-center w-20">
-                  {/* Wild Card (Face Up 9) */}
+               
+              {/* TOP CENTER */}
+              <div className="flex w-full items-center justify-center gap-16">
+                {/* DRAW PILE */}
+                <div className="relative flex w-20 items-center">
                   <div className="absolute left-0 -rotate-12">
-                    <Card value="9" suit="♠" />
+                    <Card card={wildCard} />
                   </div>
-                  {/* Face Down Deck (Blue) */}
-                  <div className="absolute left-4 w-[42px] h-[56px] bg-[#5b89d8] rounded-md border-2 border-white shadow-lg flex items-center justify-center">
-                    <div className="w-[30px] h-[44px] border border-white/40 rounded-sm flex items-center justify-center">
-                      <span className="text-white text-xl opacity-40">♠</span>
+
+                  <div className="absolute left-4 flex h-[56px] w-[42px] items-center justify-center rounded-md border-2 border-white bg-[#5b89d8] shadow-lg">
+                    <div className="flex h-[44px] w-[30px] items-center justify-center rounded-sm border border-white/40">
+                      <span className="text-xl text-white opacity-40">♠</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Discard Pile */}
+                {/* DISCARD */}
                 <div className="relative">
-                  <Card value="J" suit="♣" />
+                  <Card card={discardPile[discardPile.length - 1]} />
                 </div>
               </div>
 
-              {/* BOTTOM ROW: BRACKETED HAND GROUPS */}
-              <div className="flex items-end gap-4 h-24">
-                {/* Pure Sequence */}
+              {/* PLAYER CARDS - SAME POSITION, SAME HEIGHT */}
+              <div className="flex h-24 items-end gap-4 overflow-visible">
                 <div className="flex flex-col items-center">
                   <div className="flex -space-x-7">
-                    <Card value="K" suit="♠" />
-                    <Card value="Q" suit="♠" />
-                    <Card value="J" suit="♠" />
-                    <Card value="10" suit="♠" />
-                  </div>
-                  <div className="w-full bg-[#1da05a] text-[7px] text-white font-bold text-center py-0.5 rounded-b-sm mt-1 uppercase">
-                    Pure Sequence
-                  </div>
-                </div>
-
-                {/* Sequence */}
-                <div className="flex flex-col items-center">
-                  <div className="flex -space-x-7">
-                    <Card value="8" suit="♥" isRed />
-                    <Card value="9" suit="♥" isRed />
-                    <Card value="10" suit="♥" isRed />
-                  </div>
-                  <div className="w-full bg-[#e68d1e] text-[7px] text-white font-bold text-center py-0.5 rounded-b-sm mt-1 uppercase">
-                    Sequence
-                  </div>
-                </div>
-
-                {/* Invalid */}
-                <div className="flex flex-col items-center">
-                  <div className="flex -space-x-7">
-                    <Card value="A" suit="♣" />
-                    <Card value="10" suit="♦" isRed />
-                    <Card value="J" suit="♣" />
-                    <Card value="3" suit="♥" isRed />
-                    <Card value="6" suit="♠" />
-                    <Card value="K" suit="♦" isRed />
-                  </div>
-                  <div className="w-full bg-[#d32f2f] text-[7px] text-white font-bold text-center py-0.5 rounded-b-sm mt-1 uppercase">
-                    Invalid
+                    {myHand.map((card, index) => (
+                      <Card key={`${card}-${index}`} card={card} />
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* PLAYERS LAYER */}
-          {players
-            .filter((p) => p.name !== "You")
-            .map((player) => (
+          {/* OTHER PLAYERS */}
+          {players.map((player, index) => {
+            const isBottomPlayer = index === players.length - 1;
+
+            if (isBottomPlayer) return null;
+
+            return (
               <div
-                key={player.id}
-                className={`absolute flex flex-col items-center z-20 ${getPositionClasses(player.position)}`}
-                style={{ width: "74.36px", height: "87.09px" }}
+                key={player.userId}
+                className={`absolute z-20 flex flex-col items-center ${getPositionClasses(
+                  index,
+                )}`}
+                style={{
+                  width: "74.36px",
+                  height: "87.09px",
+                }}
               >
-                <span className="text-[9px] text-yellow-400 font-bold mb-1">
-                  Points: {player.points}
+                <span className="mb-1 text-[9px] font-bold text-yellow-400">
+                  Points: 10
                 </span>
-                <div className="relative w-[55px] h-[55px] rounded-full border-[1.5px] border-cyan-400 bg-black/90 shadow-[0_0_15px_rgba(34,211,238,0.5)] overflow-hidden">
+
+                <div className="relative h-[55px] w-[55px] overflow-hidden rounded-full border-[1.5px] border-cyan-400 bg-black/90 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
                   <img
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${player.name}`}
-                    alt={player.name}
-                    className="w-full h-full object-cover"
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${player.userName}`}
+                    alt={player.userName}
+                    className="h-full w-full object-cover"
                   />
                 </div>
-                <div className="mt-[-4px] z-10 w-full bg-gradient-to-b from-gray-800 to-black border border-white/10 px-1 py-0.5 rounded shadow-xl text-center">
-                  <span className="text-white text-[10px] font-black uppercase tracking-tighter truncate block">
-                    {player.name}
+
+                <div className="z-10 mt-[-4px] w-full rounded border border-white/10 bg-gradient-to-b from-gray-800 to-black px-1 py-0.5 text-center shadow-xl">
+                  <span className="block truncate text-[10px] font-black uppercase tracking-tighter text-white">
+                    {player.userName}
                   </span>
                 </div>
               </div>
-            ))}
+            );
+          })}
         </div>
       </div>
 
-      <div className="fixed bottom-0 w-full max-w-[712px] h-[55px] z-50 flex items-center justify-between px-4">
+      {/* BOTTOM CURRENT USER */}
+      <div className="fixed bottom-0 z-50 flex h-[55px] w-full max-w-[712px] items-center justify-between px-4">
         <div className="w-1/4" />
-        <div className="relative flex items-center h-full min-w-[200px]">
-          <div className="absolute inset-0 bg-black/80 border-t border-x border-white/20 rounded-t-[25px] backdrop-blur-md" />
-          <div className="relative flex items-center justify-between px-6 gap-4">
-            <div className="w-14 h-14 rounded-full border-2 border-white bg-gray-900 overflow-hidden -translate-y-7 translate-x-10 shadow-2xl">
+
+        <div className="relative flex h-full min-w-[200px] items-center">
+          <div className="absolute inset-0 rounded-t-[25px] border-x border-t border-white/20 bg-black/80 backdrop-blur-md" />
+
+          <div className="relative flex items-center justify-between gap-4 px-6">
+            <div className="translate-x-10 -translate-y-7 overflow-hidden rounded-full border-2 border-white bg-gray-900 shadow-2xl">
               <img
                 src="https://api.dicebear.com/7.x/avataaars/svg?seed=You"
                 alt="Me"
-                className="w-full h-full object-cover"
+                className="h-14 w-14 object-cover"
               />
             </div>
-            <div className="absolute flex flex-col gap-1 -translate-y-2 translate-x-30">
-              <span className="text-[9px] text-gray-400 uppercase font-black">
+
+            <div className="absolute flex translate-x-30 -translate-y-2 flex-col gap-1">
+              <span className="text-[9px] font-black uppercase text-gray-400">
                 Points
               </span>
-              <span className="text-xl text-white font-black leading-none">
+
+              <span className="text-xl font-black leading-none text-white">
                 49
               </span>
             </div>
           </div>
         </div>
-        <div className="w-1/4 flex gap-2 justify-end">
-          <button className="bg-yellow-500 text-[10px] font-bold px-4 py-1 rounded-full shadow-lg">
+
+        {/* ACTION BUTTONS */}
+        <div className="flex w-1/4 justify-end gap-2">
+          <button className="rounded-full bg-yellow-500 px-4 py-1 text-[10px] font-bold shadow-lg">
             SORT
           </button>
-          <button className="bg-cyan-500 text-[10px] font-bold px-4 py-1 rounded-full shadow-lg text-white">
+
+          <button className="rounded-full bg-cyan-500 px-4 py-1 text-[10px] font-bold text-white shadow-lg">
             GROUP
           </button>
         </div>
@@ -216,4 +341,4 @@ const GameTable = () => {
   );
 };
 
-export default GameTable;
+export default GameRoom;
