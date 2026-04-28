@@ -3,13 +3,13 @@ import socket from "../Utils/socket";
 
 export const useGameRoomSocket = (roomId) => {
   const [gameStarted, setGameStarted] = useState(false);
-  const [shouldAnimateDeal, setShouldAnimateDeal] = useState(false);
   const [players, setPlayers] = useState([]);
   const [status, setStatus] = useState("Joining room...");
   const [canStart, setCanStart] = useState(false);
   const [myHand, setMyHand] = useState([]);
   const [discardPile, setDiscardPile] = useState([]);
   const [wildCard, setWildCard] = useState(null);
+  const [animateDeal, setAnimateDeal] = useState(false);
 
   useEffect(() => {
     if (!roomId) return;
@@ -34,7 +34,7 @@ export const useGameRoomSocket = (roomId) => {
       setPlayers(gameData.players || []);
       setDiscardPile(gameData.discardPile || []);
       setWildCard(gameData.wildCard || null);
-      setShouldAnimateDeal(!gameData.isRejoin);
+      setAnimateDeal(!gameData.isRejoin);
     });
 
     socket.on("playerHand", (data) => {
@@ -68,6 +68,6 @@ export const useGameRoomSocket = (roomId) => {
     discardPile,
     wildCard,
     startGame,
-    shouldAnimateDeal,
+    animateDeal,
   };
 };

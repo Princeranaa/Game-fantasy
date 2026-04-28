@@ -21,8 +21,15 @@ const GameRoom = () => {
     myHand,
     discardPile,
     wildCard,
-    handleStartGame,
+    startGame,
+    animateDeal,
   } = useGameRoomSocket(roomId);
+
+  const currentPlayer = players.find(
+    (p) => String(p.userId) === String(user?._id),
+  );
+
+  console.log("currentPlayer", currentPlayer);
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#064e3b] font-sans">
@@ -52,7 +59,7 @@ const GameRoom = () => {
             <WaitingScreen
               status={status}
               canStart={canStart}
-              onStartGame={handleStartGame}
+              onStartGame={startGame}
             />
           ) : (
             <div
@@ -84,7 +91,7 @@ const GameRoom = () => {
                   <div className="flex -space-x-6">
                     {myHand.map((card, index) => (
                       <Card
-                        animateDeal={true}
+                        animateDeal={animateDeal}
                         index={index}
                         key={card.id || `${card.imageKey}-${index}`}
                         card={card}
@@ -107,7 +114,7 @@ const GameRoom = () => {
                 style={{ width: "74.36px", height: "87.09px" }}
               >
                 <span className="mb-1 text-[9px] font-bold text-yellow-400">
-                  Points: 10
+                  Player: {player.handPoints || 0}
                 </span>
 
                 <div className="relative h-[55px] w-[55px] overflow-hidden rounded-full border-[1.5px] border-cyan-400 bg-black/90 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
@@ -150,7 +157,7 @@ const GameRoom = () => {
               </span>
 
               <span className="text-xl font-black leading-none text-white">
-                49
+                {currentPlayer?.handPoints || 0}
               </span>
             </div>
           </div>
