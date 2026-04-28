@@ -3,6 +3,7 @@ import socket from "../Utils/socket";
 
 export const useGameRoomSocket = (roomId) => {
   const [gameStarted, setGameStarted] = useState(false);
+  const [shouldAnimateDeal, setShouldAnimateDeal] = useState(false);
   const [players, setPlayers] = useState([]);
   const [status, setStatus] = useState("Joining room...");
   const [canStart, setCanStart] = useState(false);
@@ -13,7 +14,7 @@ export const useGameRoomSocket = (roomId) => {
   useEffect(() => {
     if (!roomId) return;
     socket.emit("joinRoom", { roomId });
-    
+
     socket.on("userJoined", (data) => {
       setPlayers(data.players || []);
       setStatus("Waiting for players...");
@@ -33,6 +34,7 @@ export const useGameRoomSocket = (roomId) => {
       setPlayers(gameData.players || []);
       setDiscardPile(gameData.discardPile || []);
       setWildCard(gameData.wildCard || null);
+      setShouldAnimateDeal(!gameData.isRejoin);
     });
 
     socket.on("playerHand", (data) => {
@@ -66,5 +68,6 @@ export const useGameRoomSocket = (roomId) => {
     discardPile,
     wildCard,
     startGame,
+    shouldAnimateDeal,
   };
 };

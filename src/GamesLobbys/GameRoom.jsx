@@ -1,17 +1,17 @@
 import React from "react";
 import { useParams } from "react-router-dom";
-
 import table from "../assets/GameSection/game-table.png";
 import GamePlay from "../assets/Loading/Game-Play.png";
-
 import { useGameRoomSocket } from "../hooks/useGameRoomSocket ";
 import { getPositionClasses } from "../Utils/gameRoomPositions";
-
 import Card from "../GamesLobbys/Card";
 import WaitingScreen from "../GamesLobbys/WaitingScreen";
 
+import { useAuth } from "../context/AuthProvider";
+
 const GameRoom = () => {
   const { roomId } = useParams();
+  const { user } = useAuth();
 
   const {
     gameStarted,
@@ -79,11 +79,16 @@ const GameRoom = () => {
                 <Card card={discardPile[discardPile.length - 1]} />
               </div>
 
-              <div className="flex h-24 items-end gap-4 overflow-visible">
+              <div className="flex h-30 items-end gap-4 overflow-visible">
                 <div className="flex flex-col items-center">
-                  <div className="flex -space-x-7">
+                  <div className="flex -space-x-6">
                     {myHand.map((card, index) => (
-                      <Card key={card.id || `${card.imageKey}-${index}`} card={card} />
+                      <Card
+                        animateDeal={true}
+                        index={index}
+                        key={card.id || `${card.imageKey}-${index}`}
+                        card={card}
+                      />
                     ))}
                   </div>
                 </div>
@@ -92,7 +97,7 @@ const GameRoom = () => {
           )}
 
           {players.map((player, index) => {
-            const isBottomPlayer = index === players.length - 1;
+            const isBottomPlayer = String(player.userId) === String(user?._id);
             if (isBottomPlayer) return null;
 
             return (
